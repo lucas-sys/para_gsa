@@ -34,6 +34,11 @@ METHODS = [
     #  'global warming potential (GWP100)'),
 ]
 
+# Set to True to additionally exercise the background-uncertainty path
+# (combines foreground parameter samples with background database draws).
+# Slower and more memory-hungry than the default foreground-only run.
+INCLUDE_BACKGROUND = False
+
 
 def run_step(name, fn):
     print(f"\n{'=' * 60}", flush=True)
@@ -173,6 +178,25 @@ def step_sobol():
         print("  WARNING: No Sobol indices computed")
 
 
+def step_monte_carlo_background():
+    """Smoke-test the background-uncertainty path (small number of samples)."""
+    df = lca_monte_carlo.run_parallel_monte_carlo(
+        project_name=PROJECT_NAME,
+        group_name=GROUP_NAME,
+        functional_units=globals()['FUS'],
+        methods=METHODS,
+        n_samples=10,
+        n_workers=1,
+        random_seed=42,
+        include_background=True,
+    )
+    print(f"  MC (background) results: {df.shape}")
+    print(df.head(5).to_string())
+    if df["LCA Score"].isna().any():
+        raise ValueError("Background Monte Carlo produced NaN scores")
+    df.to_excel('results/monte_carlo/monte_carlo_background_results.xlsx', index=False)
+
+
 if __name__ == '__main__':
     steps = [
         ("Setup & FU selection", step_setup),
@@ -184,6 +208,8 @@ if __name__ == '__main__':
         ("Monte Carlo", step_monte_carlo),
         ("Sobol GSA", step_sobol),
     ]
+    if INCLUDE_BACKGROUND:
+        steps.append(("Monte Carlo with background uncertainty", step_monte_carlo_background))
 
     results = []
     for name, fn in steps:

@@ -40,6 +40,16 @@ G_BASELINE_PARAM_CONTEXT = None
 G_BASELINE_UPDATES = None
 G_BASELINE_GROUPED_UPDATES = None
 
+# Background-uncertainty globals (shared by Monte Carlo / Sobol / FAST workers)
+# These are only populated when ``include_background=True`` is passed to the
+# corresponding ``run_parallel_*`` entry point.
+G_DATA_OBJS = None
+G_METHOD_CONFIG_DICT = None
+G_FU_LABELS = None
+G_DEMANDS = None
+G_BG_MULTILCA = None       # use_distributions=True MultiLCA instance
+G_BG_MULTILCA_ITER = None  # iterator over G_BG_MULTILCA (persisted across draws)
+
 
 # -----------------------------------------------------------------------------
 # Data classes

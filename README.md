@@ -26,6 +26,7 @@ This toolkit was developed in collaboration by Rebecca Belfiore, Christhel Andra
 - **Monte Carlo Simulation** -- Parallel stochastic sampling with configurable worker count
 - **Sobol GSA** -- First-order (S1) and total-order (ST) Sobol indices via SALib with parallel evaluation
 - **FAST / RBD-FAST GSA** -- Global sensitivity analysis via Fourier Amplitude Sensitivity Test (FAST) and its Random Balance Designs variant (RBD-FAST), with parallel evaluation
+- **Background Uncertainty (BG)** -- Optionally combine foreground parameter uncertainty with background-database uncertainty (Brightway `use_distributions=True`) for Monte Carlo, Sobol, and FAST / RBD-FAST
 
 ## Project Structure
 
@@ -290,6 +291,61 @@ Key API:
 | `fast_indices_from_results(...)`                | Compute FAST / RBD-FAST sensitivity indices        |
 | `fast_indices_to_dataframe(Si, problem)`        | Convert indices to a tidy DataFrame                |
 | `run_full_fast_workflow(...)`                   | One-click workflow (build → sample → evaluate)     |
+
+## Background Uncertainty (BG)
+
+By default the GSA only perturbs the **foreground** ActivityParameters while the
+background database (e.g. ecoinvent) stays at its deterministic values. Passing
+`include_background=True` combines every parameter sample with one independent
+draw of the **background** database uncertainty, so both uncertainty sources are
+propagated together.
+
+```python
+# Monte Carlo with background uncertainty
+mc_bg = run_parallel_monte_carlo(
+    project_name=PROJECT_NAME,
+    group_name=GROUP_NAME,
+    functional_units=fu,
+    methods=methods,
+    n_samples=1000,
+    include_background=True,
+)
+
+# Sobol with background uncertainty
+sobol_bg = run_parallel_sobol_from_samples(
+    project_name=PROJECT_NAME,
+    group_name=GROUP_NAME,
+    functional_units=fu,
+    methods=methods,
+    sobol_problem=problem,
+    sobol_samples=samples,
+    include_background=True,
+)
+
+# FAST / RBD-FAST with background uncertainty
+fast_bg = lca_fast.run_parallel_fast_from_samples(
+    project_name=PROJECT_NAME,
+    group_name=GROUP_NAME,
+    functional_units=fu,
+    methods=methods,
+    fast_problem=fast_problem,
+    fast_samples=fast_samples,
+    include_background=True,
+)
+```
+
+Implementation notes:
+
+- Each worker builds an additional `MultiLCA(..., use_distributions=True)`
+  instance and advances it by exactly one draw per sample.
+- Parameterized foreground cells are masked out of the background draw
+  (`_prepare_bg_data_objs`), otherwise the foreground perturbation would be
+  counted twice (once by the background sampler, once by the delta overlay).
+- The foreground perturbation is applied as a cell-wise **delta** on top of the
+  background-sampled matrices (`compute_param_delta` /
+  `apply_param_delta_to_matrices`), so only one LCI/LCIA round is needed per sample.
+- Cost: background runs are slower and use more memory per worker, because an
+  extra distribution-sampling MultiLCA must be kept in memory.
 
 ## Multiprocessing
 

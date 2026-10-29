@@ -47,6 +47,8 @@ from utils.lca_matrices import (                        # noqa: F401
     aggregate_updates_by_cell,
     apply_updates_to_matrices,
     apply_grouped_updates_to_matrices,
+    compute_param_delta,
+    apply_param_delta_to_matrices,
 )
 
 from utils.lca_contribution import (                    # noqa: F401
@@ -62,6 +64,7 @@ from utils.lca_monte_carlo import (                     # noqa: F401
     chunkify_rows,
     _parse_score_key,
     recalculate_scores_for_sample,
+    recalculate_scores_with_background,
     init_worker,
     worker,
     run_parallel_monte_carlo,
@@ -72,6 +75,7 @@ from utils.lca_sobol import (                           # noqa: F401
     sanitize_sobol_problem,
     generate_sobol_samples,
     expected_sobol_sample_rows,
+    recalculate_scores_for_sobol_sample_with_background,
     run_parallel_sobol_from_samples,
     sobol_indices_from_results,
     sobol_indices_to_dataframe,
@@ -83,6 +87,7 @@ from utils.lca_fast import (                            # noqa: F401
     sanitize_fast_problem,
     generate_fast_samples,
     expected_fast_sample_rows,
+    recalculate_scores_for_fast_sample_with_background,
     run_parallel_fast_from_samples,
     fast_indices_from_results,
     fast_indices_to_dataframe,
