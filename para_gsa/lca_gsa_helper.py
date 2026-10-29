@@ -16,7 +16,7 @@ New code should import from the corresponding sub-module directly.
 """
 
 # -- lca_config ----------------------------------------------------------------
-from utils.lca_config import (                          # noqa: F401
+from para_gsa.lca_config import (                          # noqa: F401
     VERBOSE,
     G_GROUP,
     G_PARAMETER_FORMULA_MAP,
@@ -30,13 +30,19 @@ from utils.lca_config import (                          # noqa: F401
     G_BASELINE_PARAM_CONTEXT,
     G_BASELINE_UPDATES,
     G_BASELINE_GROUPED_UPDATES,
+    G_DATA_OBJS,
+    G_METHOD_CONFIG_DICT,
+    G_FU_LABELS,
+    G_DEMANDS,
+    G_BG_MULTILCA,
+    G_BG_MULTILCA_ITER,
     LCASetup,
     _log,
     Timer,
 )
 
 # -- lca_project_setup ---------------------------------------------------------
-from utils.lca_project_setup import (                      # noqa: F401
+from para_gsa.lca_project_setup import (                      # noqa: F401
     set_project,
     build_fu_labels,
     build_demands,
@@ -46,7 +52,7 @@ from utils.lca_project_setup import (                      # noqa: F401
 )
 
 # -- lca_parameters ------------------------------------------------------------
-from utils.lca_parameters import (                         # noqa: F401
+from para_gsa.lca_parameters import (                         # noqa: F401
     get_activity_parameters,
     build_parameter_formula_map,
     resolve_parameter_context,
@@ -57,14 +63,16 @@ from utils.lca_parameters import (                         # noqa: F401
 )
 
 # -- lca_matrices --------------------------------------------------------------
-from utils.lca_matrices import (                           # noqa: F401
+from para_gsa.lca_matrices import (                           # noqa: F401
     aggregate_updates_by_cell,
     apply_updates_to_matrices,
     apply_grouped_updates_to_matrices,
+    compute_param_delta,
+    apply_param_delta_to_matrices,
 )
 
 # -- lca_contribution ----------------------------------------------------------
-from utils.lca_contribution import (                       # noqa: F401
+from para_gsa.lca_contribution import (                       # noqa: F401
     contribution_analysis,
     oat_sensitivity,
     analytical_variance_from_parameter,
@@ -75,18 +83,19 @@ from utils.lca_contribution import (                       # noqa: F401
 )
 
 # -- lca_monte_carlo -----------------------------------------------------------
-from utils.lca_monte_carlo import (                        # noqa: F401
+from para_gsa.lca_monte_carlo import (                        # noqa: F401
     mc_sample,
     chunkify_rows,
     _parse_score_key,
     recalculate_scores_for_sample,
+    recalculate_scores_with_background,
     init_worker,
     worker,
     run_parallel_monte_carlo,
 )
 
 # -- lca_sobol -----------------------------------------------------------------
-from utils.lca_sobol import (                              # noqa: F401
+from para_gsa.lca_sobol import (                              # noqa: F401
     build_sobol_problem,
     sanitize_sobol_problem,
     generate_sobol_samples,
@@ -94,6 +103,7 @@ from utils.lca_sobol import (                              # noqa: F401
     init_worker_sobol,
     sobol_worker,
     recalculate_scores_for_sobol_sample,
+    recalculate_scores_for_sobol_sample_with_background,
     run_parallel_sobol_from_samples,
     sobol_indices_from_results,
     sobol_indices_to_dataframe,
@@ -101,7 +111,7 @@ from utils.lca_sobol import (                              # noqa: F401
 )
 
 # -- lca_fast ------------------------------------------------------------------
-from utils.lca_fast import (                               # noqa: F401
+from para_gsa.lca_fast import (                               # noqa: F401
     build_fast_problem,
     sanitize_fast_problem,
     generate_fast_samples,
@@ -109,6 +119,7 @@ from utils.lca_fast import (                               # noqa: F401
     init_worker_fast,
     fast_worker,
     recalculate_scores_for_fast_sample,
+    recalculate_scores_for_fast_sample_with_background,
     run_parallel_fast_from_samples,
     fast_indices_from_results,
     fast_indices_to_dataframe,

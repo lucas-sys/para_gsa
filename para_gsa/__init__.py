@@ -1,5 +1,5 @@
 """
-utils — LCA Global Sensitivity Analysis (GSA) Toolkit
+para_gsa — LCA Global Sensitivity Analysis (GSA) Toolkit
 
 Modular toolkit for parameter-perturbation Life Cycle Assessment
 using Brightway2.5, SALib, and multiprocessing.
@@ -17,14 +17,16 @@ lca_fast            FAST / RBD-FAST global sensitivity analysis
 lca_gsa_helper      Backward-compatible re-export layer
 """
 
-from utils.lca_config import (                         # noqa: F401
+__version__ = "0.1.0"
+
+from para_gsa.lca_config import (                         # noqa: F401
     VERBOSE,
     LCASetup,
     _log,
     Timer,
 )
 
-from utils.lca_project_setup import (                   # noqa: F401
+from para_gsa.lca_project_setup import (                   # noqa: F401
     set_project,
     build_fu_labels,
     build_demands,
@@ -33,7 +35,7 @@ from utils.lca_project_setup import (                   # noqa: F401
     deterministic_lca,
 )
 
-from utils.lca_parameters import (                      # noqa: F401
+from para_gsa.lca_parameters import (                      # noqa: F401
     get_activity_parameters,
     build_parameter_formula_map,
     resolve_parameter_context,
@@ -43,13 +45,15 @@ from utils.lca_parameters import (                      # noqa: F401
     evaluate_exchange_formulas,
 )
 
-from utils.lca_matrices import (                        # noqa: F401
+from para_gsa.lca_matrices import (                        # noqa: F401
     aggregate_updates_by_cell,
     apply_updates_to_matrices,
     apply_grouped_updates_to_matrices,
+    compute_param_delta,
+    apply_param_delta_to_matrices,
 )
 
-from utils.lca_contribution import (                    # noqa: F401
+from para_gsa.lca_contribution import (                    # noqa: F401
     contribution_analysis,
     oat_sensitivity,
     analytical_variance_from_parameter,
@@ -57,36 +61,39 @@ from utils.lca_contribution import (                    # noqa: F401
     combine_oat_and_analytical_variance,
 )
 
-from utils.lca_monte_carlo import (                     # noqa: F401
+from para_gsa.lca_monte_carlo import (                     # noqa: F401
     mc_sample,
     chunkify_rows,
     _parse_score_key,
     recalculate_scores_for_sample,
+    recalculate_scores_with_background,
     init_worker,
     worker,
     run_parallel_monte_carlo,
 )
 
-from utils.lca_sobol import (                           # noqa: F401
+from para_gsa.lca_sobol import (                           # noqa: F401
     build_sobol_problem,
     sanitize_sobol_problem,
     generate_sobol_samples,
     expected_sobol_sample_rows,
+    recalculate_scores_for_sobol_sample_with_background,
     run_parallel_sobol_from_samples,
     sobol_indices_from_results,
     sobol_indices_to_dataframe,
     run_full_sobol_workflow,
 )
 
-from utils.lca_fast import (                            # noqa: F401
+from para_gsa.lca_fast import (                            # noqa: F401
     build_fast_problem,
     sanitize_fast_problem,
     generate_fast_samples,
     expected_fast_sample_rows,
+    recalculate_scores_for_fast_sample_with_background,
     run_parallel_fast_from_samples,
     fast_indices_from_results,
     fast_indices_to_dataframe,
     run_full_fast_workflow,
 )
 
-from utils.lca_gsa_helper import *                      # noqa: F401,F403
+from para_gsa.lca_gsa_helper import *                      # noqa: F401,F403

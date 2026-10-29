@@ -9,10 +9,19 @@ This module provides:
 - init_worker_sobol(): Sobol multiprocessing worker initialization
 - sobol_worker(): Sobol multiprocessing worker processing function
 - recalculate_scores_for_sobol_sample(): Re-evaluate LCA scores for a single sample (Sobol version)
+- recalculate_scores_for_sobol_sample_with_background(): Same, on top of a background draw
 - run_parallel_sobol_from_samples(): Parallel evaluation of Sobol samples
 - sobol_indices_from_results(): Compute Sobol indices (S1, ST) from results
 - sobol_indices_to_dataframe(): Convert Sobol indices to a tidy DataFrame
 - run_full_sobol_workflow(): One-click Sobol workflow (build -> sample -> evaluate)
+
+Background uncertainty
+----------------------
+When ``include_background=True`` is passed to ``run_parallel_sobol_from_samples``,
+each Sobol sample is combined with one independent draw of the
+background-database uncertainty (Brightway ``use_distributions=True``).
+The foreground parameter perturbation is overlaid as a delta on top of the
+background-sampled matrices.
 """
 
 from __future__ import annotations
@@ -27,9 +36,10 @@ import pandas as pd
 from SALib.analyze import sobol as sobol_analyze
 from SALib.sample import sobol as sobol_sample_mod
 
+import bw2calc as bc
 import bw2data as bd
 
-from utils.lca_config import (
+from para_gsa.lca_config import (
     VERBOSE,
     G_GROUP,
     G_PARAMETER_FORMULA_MAP,
@@ -42,20 +52,35 @@ from utils.lca_config import (
     G_BASELINE_PARAM_CONTEXT,
     G_BASELINE_UPDATES,
     G_BASELINE_GROUPED_UPDATES,
+    G_DATA_OBJS,
+    G_METHOD_CONFIG_DICT,
+    G_DEMANDS,
+    G_BG_MULTILCA,
+    G_BG_MULTILCA_ITER,
     Timer,
     _log,
 )
-from utils.lca_project_setup import set_project, initialize_multilca
-from utils.lca_parameters import (
+from para_gsa.lca_project_setup import set_project, initialize_multilca
+from para_gsa.lca_parameters import (
     get_activity_parameters,
     build_parameter_formula_map,
     build_exchange_formula_map,
     resolve_parameter_context,
     evaluate_exchange_formulas,
 )
-from utils.lca_matrices import aggregate_updates_by_cell, apply_grouped_updates_to_matrices
-from utils.lca_contribution import _reset_and_recalculate_mlca
-from utils.lca_monte_carlo import _parse_score_key
+from para_gsa.lca_matrices import (
+    aggregate_updates_by_cell,
+    apply_grouped_updates_to_matrices,
+    compute_param_delta,
+    apply_param_delta_to_matrices,
+)
+from para_gsa.lca_contribution import _reset_and_recalculate_mlca
+from para_gsa.lca_monte_carlo import (
+    _parse_score_key,
+    _recompute_scores,
+    _prepare_bg_data_objs,
+    bg_matrix_iterator,
+)
 
 
 # -----------------------------------------------------------------------------
@@ -425,20 +450,16 @@ def init_worker_sobol(
     methods: Sequence[tuple],
     sobol_parameter_names: Sequence[str],
     verbose: bool = False,
+    include_background: bool = False,
 ):
     """Initialize a Sobol multiprocessing worker."""
     global VERBOSE
-    global G_GROUP
-    global G_PARAMETER_FORMULA_MAP
-    global G_EXCHANGE_FORMULA_MAP
-    global G_MULTILCA
-    global G_BASE_TECH
-    global G_BASE_BIO
-    global G_METHODS
+    global G_GROUP, G_PARAMETER_FORMULA_MAP, G_EXCHANGE_FORMULA_MAP
+    global G_MULTILCA, G_BASE_TECH, G_BASE_BIO, G_METHODS
     global G_SOBOL_PARAMETER_NAMES
-    global G_BASELINE_PARAM_CONTEXT
-    global G_BASELINE_UPDATES
-    global G_BASELINE_GROUPED_UPDATES
+    global G_BASELINE_PARAM_CONTEXT, G_BASELINE_UPDATES, G_BASELINE_GROUPED_UPDATES
+    global G_DATA_OBJS, G_METHOD_CONFIG_DICT, G_DEMANDS
+    global G_BG_MULTILCA, G_BG_MULTILCA_ITER
 
     VERBOSE = verbose
 
@@ -470,20 +491,97 @@ def init_worker_sobol(
         )
         G_BASELINE_GROUPED_UPDATES = aggregate_updates_by_cell(G_BASELINE_UPDATES)
 
+        G_DATA_OBJS = setup.data_objs
+        G_METHOD_CONFIG_DICT = setup.method_config_dict
+        G_DEMANDS = setup.demands
+
+        if include_background:
+            with Timer("bg_mlca_init"):
+                bg_data_objs = _prepare_bg_data_objs(G_DATA_OBJS, G_EXCHANGE_FORMULA_MAP)
+                G_BG_MULTILCA = bc.MultiLCA(
+                    demands=G_DEMANDS,
+                    method_config=G_METHOD_CONFIG_DICT,
+                    data_objs=bg_data_objs,
+                    use_distributions=True,
+                )
+                G_BG_MULTILCA.lci()
+                G_BG_MULTILCA.lcia()
+                G_BG_MULTILCA_ITER = bg_matrix_iterator(G_BG_MULTILCA)
+            bg_flag = "ON"
+        else:
+            G_BG_MULTILCA = None
+            G_BG_MULTILCA_ITER = None
+            bg_flag = "OFF"
+
         _log(
             f"initialized Sobol worker group={group_name} "
             f"fus={len(fus)} methods={len(methods)} "
             f"param_formulas={len(G_PARAMETER_FORMULA_MAP)} "
             f"exchange_formulas={len(G_EXCHANGE_FORMULA_MAP)} "
-            f"sobol_params={len(G_SOBOL_PARAMETER_NAMES)}"
+            f"sobol_params={len(G_SOBOL_PARAMETER_NAMES)} "
+            f"BACKGROUND={bg_flag}"
         )
+
+
+# -----------------------------------------------------------------------------
+# Per-sample calculation (runs inside worker)
+# -----------------------------------------------------------------------------
+
+def _evaluate_sobol_sample(sample_row: np.ndarray) -> dict:
+    """Convert one Sobol sample row into aggregated cell-wise updates."""
+    sampled_values = {
+        G_SOBOL_PARAMETER_NAMES[j]: float(sample_row[j])
+        for j in range(len(G_SOBOL_PARAMETER_NAMES))
+    }
+    param_context = resolve_parameter_context(
+        G_GROUP,
+        sampled_values_by_name=sampled_values,
+        parameter_formula_map=G_PARAMETER_FORMULA_MAP,
+    )
+    new_updates = evaluate_exchange_formulas(G_EXCHANGE_FORMULA_MAP, param_context)
+    return aggregate_updates_by_cell(new_updates)
+
+
+def _calc_sobol_nobg(sample_index: int, new_grouped: dict) -> List[dict]:
+    """Sobol without background uncertainty: overlay parameter updates on baseline."""
+    tech_matrix, bio_matrix = apply_grouped_updates_to_matrices(
+        base_tech=G_BASE_TECH,
+        base_bio=G_BASE_BIO,
+        baseline_grouped_updates=G_BASELINE_GROUPED_UPDATES,
+        new_grouped_updates=new_grouped,
+    )
+    rows = _recompute_scores(G_MULTILCA, tech_matrix, bio_matrix)
+    for r in rows:
+        r["Sample index"] = sample_index
+    return rows
+
+
+def _calc_sobol_bg(sample_index: int, new_grouped: dict) -> List[dict]:
+    """Sobol with background uncertainty: draw background state, overlay delta, score."""
+    param_delta = compute_param_delta(G_BASELINE_GROUPED_UPDATES, new_grouped)
+    mlca = G_BG_MULTILCA
+    bg_iter = G_BG_MULTILCA_ITER
+
+    next(bg_iter)
+    # Use the underlying ``MappedMatrix.matrix`` rather than
+    # ``mlca.technosphere_matrix``: ``_recompute_scores`` replaces the cached
+    # ``mlca.technosphere_matrix`` attribute with a copy.
+    tech_matrix, bio_matrix = apply_param_delta_to_matrices(
+        mlca.technosphere_mm.matrix,
+        mlca.biosphere_mm.matrix,
+        param_delta,
+    )
+    rows = _recompute_scores(mlca, tech_matrix, bio_matrix)
+    for r in rows:
+        r["Sample index"] = sample_index
+    return rows
 
 
 def recalculate_scores_for_sobol_sample(
     sample_index: int,
     sampled_values: Mapping[str, float],
 ) -> List[dict]:
-    """Evaluate one Sobol sample row and return tidy score rows."""
+    """Evaluate one Sobol sample row (no background draw) and return tidy score rows."""
     param_context = resolve_parameter_context(
         G_GROUP,
         sampled_values_by_name=sampled_values,
@@ -517,21 +615,41 @@ def recalculate_scores_for_sobol_sample(
     return rows
 
 
+def recalculate_scores_for_sobol_sample_with_background(
+    sample_index: int,
+    sampled_values: Mapping[str, float],
+) -> List[dict]:
+    """
+    Evaluate one Sobol sample row on top of a fresh background uncertainty draw.
+
+    Requires a worker initialized with ``include_background=True``.
+    """
+    if G_BG_MULTILCA is None:
+        raise RuntimeError(
+            "recalculate_scores_for_sobol_sample_with_background() requires a "
+            "worker initialized with include_background=True"
+        )
+    param_context = resolve_parameter_context(
+        G_GROUP,
+        sampled_values_by_name=sampled_values,
+        parameter_formula_map=G_PARAMETER_FORMULA_MAP,
+    )
+    new_updates = evaluate_exchange_formulas(G_EXCHANGE_FORMULA_MAP, param_context)
+    new_grouped_updates = aggregate_updates_by_cell(new_updates)
+    return _calc_sobol_bg(sample_index, new_grouped_updates)
+
+
 def sobol_worker(sample_chunk: Sequence[Tuple[int, np.ndarray]]) -> List[dict]:
     """Multiprocessing worker for Sobol sample chunks."""
+    include_background = G_BG_MULTILCA is not None
     rows = []
-    with Timer(f"sobol chunk size={len(sample_chunk)}"):
+    with Timer(f"sobol chunk size={len(sample_chunk)} bg={include_background}"):
         for sample_index, sample_row in sample_chunk:
-            sampled_values = {
-                G_SOBOL_PARAMETER_NAMES[j]: float(sample_row[j])
-                for j in range(len(G_SOBOL_PARAMETER_NAMES))
-            }
-            rows.extend(
-                recalculate_scores_for_sobol_sample(
-                    sample_index=sample_index,
-                    sampled_values=sampled_values,
-                )
-            )
+            new_grouped_updates = _evaluate_sobol_sample(sample_row)
+            if include_background:
+                rows.extend(_calc_sobol_bg(sample_index, new_grouped_updates))
+            else:
+                rows.extend(_calc_sobol_nobg(sample_index, new_grouped_updates))
     return rows
 
 
@@ -548,11 +666,23 @@ def run_parallel_sobol_from_samples(
     sobol_samples: np.ndarray,
     n_workers: Optional[int] = None,
     verbose: bool = False,
+    include_background: bool = False,
 ) -> pd.DataFrame:
     """
     Evaluate an existing Sobol sample matrix in parallel.
 
-    Returns a tidy DataFrame with one row per sample/FU/method combination.
+    Parameters
+    ----------
+    include_background : bool, default False
+        If ``True``, each worker also draws background-database uncertainty
+        (Brightway ``use_distributions=True``) for every Sobol sample and
+        overlays the foreground parameter delta on top of it.
+
+    Returns
+    -------
+    pd.DataFrame
+        Tidy DataFrame with one row per sample/FU/method combination:
+        ``Sample index, Method, Method full, Functional unit, LCA Score``
     """
     set_project(project_name)
 
@@ -589,6 +719,7 @@ def run_parallel_sobol_from_samples(
             methods,
             sobol_problem["names"],
             verbose,
+            include_background,
         ),
     ) as pool:
         nested_results = pool.map(sobol_worker, chunks)
@@ -685,12 +816,18 @@ def run_full_sobol_workflow(
     scramble: bool = True,
     seed: Optional[int] = 42,
     verbose: bool = False,
+    include_background: bool = False,
 ) -> Dict[str, object]:
     """
     Convenience notebook-facing Sobol workflow:
     1. build problem
     2. generate Sobol samples
     3. evaluate in parallel
+
+    Parameters
+    ----------
+    include_background : bool, default False
+        Enable background-database uncertainty sampling.
 
     Returns dict with:
         - sobol_problem
@@ -715,6 +852,7 @@ def run_full_sobol_workflow(
         sobol_samples=sobol_samples,
         n_workers=n_workers,
         verbose=verbose,
+        include_background=include_background,
     )
 
     return {

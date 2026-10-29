@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 import traceback
 import bw2data as bd
-from utils import lca_project_setup
+from para_gsa import lca_project_setup
 
 
 # ============================================================

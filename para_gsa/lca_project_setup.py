@@ -20,7 +20,7 @@ import bw2data as bd
 from bw2calc.method_config import MethodConfig
 from bw2calc.multi_lca import MultiLCA
 
-from utils.lca_config import LCASetup
+from para_gsa.lca_config import LCASetup
 
 
 def set_project(project_name: str) -> None:

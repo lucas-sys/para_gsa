@@ -24,7 +24,7 @@ from bw2data.backends.schema import ExchangeDataset
 from bw2data.parameters import ActivityParameter, ParameterizedExchange, parameters
 from asteval import Interpreter
 
-from utils.lca_config import _log
+from para_gsa.lca_config import _log
 
 
 # -----------------------------------------------------------------------------

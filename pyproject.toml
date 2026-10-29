@@ -1,0 +1,81 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "para-gsa"
+dynamic = ["version"]
+description = "Parameter-perturbation life cycle assessment (LCA) and global sensitivity analysis (GSA) with Brightway 2.5 and SALib"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Nanlin Liao" },
+    { name = "Rebecca Belfiore" },
+    { name = "Christhel Andrade Diaz" },
+    { name = "Weier Liu" },
+]
+keywords = [
+    "life cycle assessment",
+    "LCA",
+    "sensitivity analysis",
+    "global sensitivity analysis",
+    "Sobol",
+    "FAST",
+    "SALib",
+    "Brightway",
+    "uncertainty analysis",
+    "Monte Carlo",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "bw2data>=4.0,<5",
+    "bw2calc>=2.0,<3",
+    "bw2analyzer>=0.11.8",
+    "SALib>=1.4,<2",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "asteval>=0.9.6",
+]
+
+[project.optional-dependencies]
+# Only needed for the helper script that imports ecoinvent / custom databases
+io = ["bw2io>=0.9"]
+dev = [
+    "build>=1.2",
+    "twine>=5.0",
+    "pytest>=8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/lucas-sys/para_gsa"
+Repository = "https://github.com/lucas-sys/para_gsa"
+Issues = "https://github.com/lucas-sys/para_gsa/issues"
+Changelog = "https://github.com/lucas-sys/para_gsa/commits/main"
+
+[tool.hatch.version]
+path = "para_gsa/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["para_gsa"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/para_gsa",
+    "/README.md",
+    "/README_CN.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]

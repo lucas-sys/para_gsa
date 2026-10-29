@@ -9,6 +9,7 @@ This module provides:
 - init_worker_fast(): FAST multiprocessing worker initialization
 - fast_worker(): FAST multiprocessing worker processing function
 - recalculate_scores_for_fast_sample(): Re-evaluate LCA scores for a single sample (FAST version)
+- recalculate_scores_for_fast_sample_with_background(): Same, on top of a background draw
 - run_parallel_fast_from_samples(): Parallel evaluation of FAST samples
 - fast_indices_from_results(): Compute FAST indices (S1, ST) from results
 - fast_indices_to_dataframe(): Convert FAST indices to a tidy DataFrame
@@ -33,6 +34,14 @@ SALib distribution format
 - norm    : bounds = [mean, std]
 - lognorm : bounds = [ln_mean, ln_std]
 - triang  : bounds = [low, high, c],  c = relative peak in [0, 1)
+
+Background uncertainty
+----------------------
+When ``include_background=True`` is passed to ``run_parallel_fast_from_samples``,
+each FAST/RBD-FAST sample is combined with one independent draw of the
+background-database uncertainty (Brightway ``use_distributions=True``).
+The foreground parameter perturbation is overlaid as a delta on top of the
+background-sampled matrices.
 """
 
 from __future__ import annotations
@@ -45,9 +54,10 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+import bw2calc as bc
 import bw2data as bd
 
-from utils.lca_config import (
+from para_gsa.lca_config import (
     VERBOSE,
     G_GROUP,
     G_PARAMETER_FORMULA_MAP,
@@ -59,20 +69,35 @@ from utils.lca_config import (
     G_BASELINE_PARAM_CONTEXT,
     G_BASELINE_UPDATES,
     G_BASELINE_GROUPED_UPDATES,
+    G_DATA_OBJS,
+    G_METHOD_CONFIG_DICT,
+    G_DEMANDS,
+    G_BG_MULTILCA,
+    G_BG_MULTILCA_ITER,
     Timer,
     _log,
 )
-from utils.lca_project_setup import set_project, initialize_multilca
-from utils.lca_parameters import (
+from para_gsa.lca_project_setup import set_project, initialize_multilca
+from para_gsa.lca_parameters import (
     get_activity_parameters,
     build_parameter_formula_map,
     build_exchange_formula_map,
     resolve_parameter_context,
     evaluate_exchange_formulas,
 )
-from utils.lca_matrices import aggregate_updates_by_cell, apply_grouped_updates_to_matrices
-from utils.lca_contribution import _reset_and_recalculate_mlca
-from utils.lca_monte_carlo import _parse_score_key
+from para_gsa.lca_matrices import (
+    aggregate_updates_by_cell,
+    apply_grouped_updates_to_matrices,
+    compute_param_delta,
+    apply_param_delta_to_matrices,
+)
+from para_gsa.lca_contribution import _reset_and_recalculate_mlca
+from para_gsa.lca_monte_carlo import (
+    _parse_score_key,
+    _recompute_scores,
+    _prepare_bg_data_objs,
+    bg_matrix_iterator,
+)
 
 # ---------------------------------------------------------------------------
 # Worker-level global for FAST parameter names (separate from Sobol globals)
@@ -473,20 +498,16 @@ def init_worker_fast(
     methods: Sequence[tuple],
     fast_parameter_names: Sequence[str],
     verbose: bool = False,
+    include_background: bool = False,
 ) -> None:
     """Initialize a FAST multiprocessing worker."""
     global VERBOSE
-    global G_GROUP
-    global G_PARAMETER_FORMULA_MAP
-    global G_EXCHANGE_FORMULA_MAP
-    global G_MULTILCA
-    global G_BASE_TECH
-    global G_BASE_BIO
-    global G_METHODS
+    global G_GROUP, G_PARAMETER_FORMULA_MAP, G_EXCHANGE_FORMULA_MAP
+    global G_MULTILCA, G_BASE_TECH, G_BASE_BIO, G_METHODS
     global G_FAST_PARAMETER_NAMES
-    global G_BASELINE_PARAM_CONTEXT
-    global G_BASELINE_UPDATES
-    global G_BASELINE_GROUPED_UPDATES
+    global G_BASELINE_PARAM_CONTEXT, G_BASELINE_UPDATES, G_BASELINE_GROUPED_UPDATES
+    global G_DATA_OBJS, G_METHOD_CONFIG_DICT, G_DEMANDS
+    global G_BG_MULTILCA, G_BG_MULTILCA_ITER
 
     VERBOSE = verbose
 
@@ -518,20 +539,97 @@ def init_worker_fast(
         )
         G_BASELINE_GROUPED_UPDATES = aggregate_updates_by_cell(G_BASELINE_UPDATES)
 
+        G_DATA_OBJS = setup.data_objs
+        G_METHOD_CONFIG_DICT = setup.method_config_dict
+        G_DEMANDS = setup.demands
+
+        if include_background:
+            with Timer("bg_mlca_init"):
+                bg_data_objs = _prepare_bg_data_objs(G_DATA_OBJS, G_EXCHANGE_FORMULA_MAP)
+                G_BG_MULTILCA = bc.MultiLCA(
+                    demands=G_DEMANDS,
+                    method_config=G_METHOD_CONFIG_DICT,
+                    data_objs=bg_data_objs,
+                    use_distributions=True,
+                )
+                G_BG_MULTILCA.lci()
+                G_BG_MULTILCA.lcia()
+                G_BG_MULTILCA_ITER = bg_matrix_iterator(G_BG_MULTILCA)
+            bg_flag = "ON"
+        else:
+            G_BG_MULTILCA = None
+            G_BG_MULTILCA_ITER = None
+            bg_flag = "OFF"
+
         _log(
             f"initialized FAST worker group={group_name} "
             f"fus={len(fus)} methods={len(methods)} "
             f"param_formulas={len(G_PARAMETER_FORMULA_MAP)} "
             f"exchange_formulas={len(G_EXCHANGE_FORMULA_MAP)} "
-            f"fast_params={len(G_FAST_PARAMETER_NAMES)}"
+            f"fast_params={len(G_FAST_PARAMETER_NAMES)} "
+            f"BACKGROUND={bg_flag}"
         )
+
+
+# -----------------------------------------------------------------------------
+# Per-sample calculation (runs inside worker)
+# -----------------------------------------------------------------------------
+
+def _evaluate_fast_sample(sample_row: np.ndarray) -> dict:
+    """Convert one FAST sample row into aggregated cell-wise updates."""
+    sampled_values = {
+        G_FAST_PARAMETER_NAMES[j]: float(sample_row[j])
+        for j in range(len(G_FAST_PARAMETER_NAMES))
+    }
+    param_context = resolve_parameter_context(
+        G_GROUP,
+        sampled_values_by_name=sampled_values,
+        parameter_formula_map=G_PARAMETER_FORMULA_MAP,
+    )
+    new_updates = evaluate_exchange_formulas(G_EXCHANGE_FORMULA_MAP, param_context)
+    return aggregate_updates_by_cell(new_updates)
+
+
+def _calc_fast_nobg(sample_index: int, new_grouped: dict) -> List[dict]:
+    """FAST without background uncertainty: overlay parameter updates on baseline."""
+    tech_matrix, bio_matrix = apply_grouped_updates_to_matrices(
+        base_tech=G_BASE_TECH,
+        base_bio=G_BASE_BIO,
+        baseline_grouped_updates=G_BASELINE_GROUPED_UPDATES,
+        new_grouped_updates=new_grouped,
+    )
+    rows = _recompute_scores(G_MULTILCA, tech_matrix, bio_matrix)
+    for r in rows:
+        r["Sample index"] = sample_index
+    return rows
+
+
+def _calc_fast_bg(sample_index: int, new_grouped: dict) -> List[dict]:
+    """FAST with background uncertainty: draw background state, overlay delta, score."""
+    param_delta = compute_param_delta(G_BASELINE_GROUPED_UPDATES, new_grouped)
+    mlca = G_BG_MULTILCA
+    bg_iter = G_BG_MULTILCA_ITER
+
+    next(bg_iter)
+    # Use the underlying ``MappedMatrix.matrix`` rather than
+    # ``mlca.technosphere_matrix``: ``_recompute_scores`` replaces the cached
+    # ``mlca.technosphere_matrix`` attribute with a copy.
+    tech_matrix, bio_matrix = apply_param_delta_to_matrices(
+        mlca.technosphere_mm.matrix,
+        mlca.biosphere_mm.matrix,
+        param_delta,
+    )
+    rows = _recompute_scores(mlca, tech_matrix, bio_matrix)
+    for r in rows:
+        r["Sample index"] = sample_index
+    return rows
 
 
 def recalculate_scores_for_fast_sample(
     sample_index: int,
     sampled_values: Mapping[str, float],
 ) -> List[dict]:
-    """Evaluate one FAST sample row and return tidy score rows."""
+    """Evaluate one FAST sample row (no background draw) and return tidy score rows."""
     param_context = resolve_parameter_context(
         G_GROUP,
         sampled_values_by_name=sampled_values,
@@ -565,21 +663,41 @@ def recalculate_scores_for_fast_sample(
     return rows
 
 
+def recalculate_scores_for_fast_sample_with_background(
+    sample_index: int,
+    sampled_values: Mapping[str, float],
+) -> List[dict]:
+    """
+    Evaluate one FAST sample row on top of a fresh background uncertainty draw.
+
+    Requires a worker initialized with ``include_background=True``.
+    """
+    if G_BG_MULTILCA is None:
+        raise RuntimeError(
+            "recalculate_scores_for_fast_sample_with_background() requires a "
+            "worker initialized with include_background=True"
+        )
+    param_context = resolve_parameter_context(
+        G_GROUP,
+        sampled_values_by_name=sampled_values,
+        parameter_formula_map=G_PARAMETER_FORMULA_MAP,
+    )
+    new_updates = evaluate_exchange_formulas(G_EXCHANGE_FORMULA_MAP, param_context)
+    new_grouped_updates = aggregate_updates_by_cell(new_updates)
+    return _calc_fast_bg(sample_index, new_grouped_updates)
+
+
 def fast_worker(sample_chunk: Sequence[Tuple[int, np.ndarray]]) -> List[dict]:
     """Multiprocessing worker for FAST sample chunks."""
+    include_background = G_BG_MULTILCA is not None
     rows = []
-    with Timer(f"fast chunk size={len(sample_chunk)}"):
+    with Timer(f"fast chunk size={len(sample_chunk)} bg={include_background}"):
         for sample_index, sample_row in sample_chunk:
-            sampled_values = {
-                G_FAST_PARAMETER_NAMES[j]: float(sample_row[j])
-                for j in range(len(G_FAST_PARAMETER_NAMES))
-            }
-            rows.extend(
-                recalculate_scores_for_fast_sample(
-                    sample_index=sample_index,
-                    sampled_values=sampled_values,
-                )
-            )
+            new_grouped_updates = _evaluate_fast_sample(sample_row)
+            if include_background:
+                rows.extend(_calc_fast_bg(sample_index, new_grouped_updates))
+            else:
+                rows.extend(_calc_fast_nobg(sample_index, new_grouped_updates))
     return rows
 
 
@@ -596,6 +714,7 @@ def run_parallel_fast_from_samples(
     fast_samples: np.ndarray,
     n_workers: Optional[int] = None,
     verbose: bool = False,
+    include_background: bool = False,
 ) -> pd.DataFrame:
     """
     Evaluate an existing FAST sample matrix in parallel.
@@ -619,6 +738,10 @@ def run_parallel_fast_from_samples(
         Number of parallel worker processes. Defaults to ``cpu_count - 1``.
     verbose : bool
         Enable per-worker verbose logging.
+    include_background : bool, default False
+        If ``True``, each worker also draws background-database uncertainty
+        (Brightway ``use_distributions=True``) for every sample and overlays
+        the foreground parameter delta on top of it.
 
     Returns
     -------
@@ -660,6 +783,7 @@ def run_parallel_fast_from_samples(
             methods,
             fast_problem["names"],
             verbose,
+            include_background,
         ),
     ) as pool:
         nested_results = pool.map(fast_worker, chunks)
@@ -833,6 +957,7 @@ def run_full_fast_workflow(
     seed: Optional[int] = 42,
     verbose: bool = False,
     method: str = "fast",
+    include_background: bool = False,
 ) -> Dict[str, object]:
     """
     Convenience one-click FAST GSA workflow:
@@ -862,6 +987,8 @@ def run_full_fast_workflow(
         Worker verbose logging.
     method : {'fast', 'rbd_fast'}
         Sampling and analysis method.
+    include_background : bool, default False
+        Enable background-database uncertainty sampling.
 
     Returns
     -------
@@ -888,6 +1015,7 @@ def run_full_fast_workflow(
         fast_samples=fast_samples,
         n_workers=n_workers,
         verbose=verbose,
+        include_background=include_background,
     )
 
     return {

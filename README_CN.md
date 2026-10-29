@@ -1,11 +1,11 @@
 ## 贡献者
 
-<a href="https://github.com/lucas-sys/para_gsa_bw25/graphs/contributors">
-  <img src="https://img.shields.io/github/contributors/lucas-sys/para_gsa_bw25?style=for-the-badge&logo=github" alt="贡献者人数"/>
+<a href="https://github.com/lucas-sys/para_gsa/graphs/contributors">
+  <img src="https://img.shields.io/github/contributors/lucas-sys/para_gsa?style=for-the-badge&logo=github" alt="贡献者人数"/>
 </a>
 
-<a href="https://github.com/lucas-sys/para_gsa_bw25/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=lucas-sys/para_gsa_bw25" alt="贡献者头像" />
+<a href="https://github.com/lucas-sys/para_gsa/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=lucas-sys/para_gsa" alt="贡献者头像" />
 </a>
 
 
@@ -25,12 +25,13 @@
 - **蒙特卡洛模拟** -- 可配置工作进程数的并行随机采样
 - **Sobol GSA** -- 基于 SALib 的一阶（S1）和全局（ST）Sobol 指数分析，支持并行计算
 - **FAST / RBD-FAST GSA** -- 基于傅里叶幅值灵敏度测试（FAST）及随机平衡设计变体（RBD-FAST）的全局敏感性分析，支持并行计算
+- **背景不确定性（BG）** -- 可将前景参数不确定性与背景数据库不确定性（Brightway `use_distributions=True`）联合传播，支持蒙特卡洛、Sobol 与 FAST / RBD-FAST
 
 ## 项目结构
 
 ```
 .
-├── utils/                            # 核心 LCA 模块
+├── para_gsa/                            # 核心 LCA 模块
 │   ├── __init__.py                   # 公共 API 统一导出
 │   ├── lca_config.py                 # 配置、日志、计时器、LCASetup
 │   ├── lca_project_setup.py          # Brightway 项目初始化、MultiLCA
@@ -57,6 +58,7 @@
 ├── test_run.py                       # 快速验证测试
 ├── test_sobol_only.py                # Sobol 专项测试
 ├── requirements.txt
+├── pyproject.toml                    # 打包与依赖声明
 ├── LICENSE
 └── README.md
 ```
@@ -64,18 +66,46 @@
 ## 环境要求
 
 - Python >= 3.10
-- [Brightway2.5](https://brightway.dev/) (`bw2data`, `bw2calc`, `bw2io`, `bw2analyzer`)
+- [Brightway2.5](https://brightway.dev/)（`bw2data`、`bw2calc`、`bw2analyzer`；`bw2io` 仅初始化脚本需要）
 - ecoinvent 数据库（需要 ecoinvent 许可证）
 
 ## 安装
 
+### 从 PyPI 安装
+
 ```bash
-# 创建并激活 conda 环境
+pip install para-gsa
+```
+
+运行时依赖（Brightway 2.5、SALib、NumPy、SciPy、pandas、asteval）会自动安装。
+仍需自备 Brightway 项目和（背景数据所需的）ecoinvent 许可证。
+
+如还需要导入 ecoinvent / 自定义数据库的辅助依赖：
+
+```bash
+pip install "para-gsa[io]"
+```
+
+验证安装：
+
+```bash
+python -c "import para_gsa; print(para_gsa.__version__)"
+```
+
+### 从源码安装（开发）
+
+```bash
+git clone https://github.com/lucas-sys/para_gsa.git
+cd para_gsa
+pip install -e ".[dev]"
+```
+
+### conda 环境
+
+```bash
 conda create -n bw25 python=3.10
 conda activate bw25
-
-# 安装依赖
-pip install -r requirements.txt
+pip install para-gsa
 ```
 
 ## 配置说明
@@ -114,7 +144,7 @@ python init_databases.py
 ### Python 脚本
 
 ```python
-from utils import (
+from para_gsa import (
     set_project, initialize_multilca, deterministic_lca,
     oat_sensitivity, run_parallel_monte_carlo,
     build_sobol_problem, generate_sobol_samples,
@@ -163,7 +193,7 @@ sobol_results = run_parallel_sobol_from_samples(
 )
 
 # FAST / RBD-FAST GSA
-from utils import lca_fast
+from para_gsa import lca_fast
 
 fast_problem, fast_params = lca_fast.build_fast_problem(GROUP_NAME)
 
@@ -292,6 +322,55 @@ result = lca_fast.run_full_fast_workflow(
 | `run_full_fast_workflow(...)`                   | 一键工作流（构建→采样→评估）                   |
 
 
+
+## 背景不确定性（BG）
+
+默认情况下 GSA 只扰动**前景** ActivityParameter，背景数据库（如 ecoinvent）保持确定性取值。
+传入 `include_background=True` 后，每个参数样本都会与一次独立的**背景**数据库不确定性抽样组合，
+两类不确定性来源同时传播。
+
+```python
+# 蒙特卡洛 + 背景不确定性
+mc_bg = run_parallel_monte_carlo(
+    project_name=PROJECT_NAME,
+    group_name=GROUP_NAME,
+    functional_units=fu,
+    methods=methods,
+    n_samples=1000,
+    include_background=True,
+)
+
+# Sobol + 背景不确定性
+sobol_bg = run_parallel_sobol_from_samples(
+    project_name=PROJECT_NAME,
+    group_name=GROUP_NAME,
+    functional_units=fu,
+    methods=methods,
+    sobol_problem=problem,
+    sobol_samples=samples,
+    include_background=True,
+)
+
+# FAST / RBD-FAST + 背景不确定性
+fast_bg = lca_fast.run_parallel_fast_from_samples(
+    project_name=PROJECT_NAME,
+    group_name=GROUP_NAME,
+    functional_units=fu,
+    methods=methods,
+    fast_problem=fast_problem,
+    fast_samples=fast_samples,
+    include_background=True,
+)
+```
+
+实现要点：
+
+- 每个工作进程额外构建一个 `MultiLCA(..., use_distributions=True)` 实例，每个样本推进一次抽样。
+- 背景抽样时会屏蔽前景参数化单元（`_prepare_bg_data_objs`），否则前景扰动会被
+  "背景抽样 + delta 叠加"重复计算，导致技术矩阵近奇异、LCA 分数爆炸。
+- 前景扰动以逐单元**增量（delta）**的形式叠加到背景抽样后的矩阵上
+  （`compute_param_delta` / `apply_param_delta_to_matrices`），每个样本只需一次 LCI/LCIA。
+- 代价：背景模式更慢、每个工作进程内存占用更高（需常驻一个带分布抽样的 MultiLCA）。
 
 ## 多进程
 

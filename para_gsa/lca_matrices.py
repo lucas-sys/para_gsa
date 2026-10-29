@@ -4,9 +4,14 @@ lca_matrices.py -- Sparse matrix update utilities
 This module safely updates technosphere/biosphere sparse matrices under parameter perturbation:
 - aggregate_updates_by_cell(): Sum exchange updates mapping to the same matrix cell
 - apply_updates_to_matrices(): Apply parameterized update deltas to base matrices
+- compute_param_delta(): Per-cell delta between new parameter values and baseline
+- apply_param_delta_to_matrices(): Overlay a parameter delta on arbitrary matrices
 
 Core formula (preserving non-parameterized contributions):
     new_cell = base_cell - baseline_param_sum + new_param_sum
+
+Background-uncertainty overlay formula:
+    final_cell = bg_cell + param_delta
 """
 
 from __future__ import annotations
@@ -80,3 +85,70 @@ def apply_updates_to_matrices(
 
 # Backward-compatible alias (used by Monte Carlo module)
 apply_grouped_updates_to_matrices = apply_updates_to_matrices
+
+
+def compute_param_delta(
+    baseline_grouped_updates: Mapping[Tuple[str, int, int], float],
+    new_grouped_updates: Mapping[Tuple[str, int, int], float],
+) -> Dict[Tuple[str, int, int], float]:
+    """
+    Compute per-cell delta = new_param_sum - baseline_param_sum.
+
+    This delta can be computed once per parameter sample and then re-used when
+    the same sample has to be applied on top of several different
+    background-sampled matrices (Monte Carlo / Sobol / FAST with background
+    uncertainty).
+
+    Parameters
+    ----------
+    baseline_grouped_updates : dict
+        {('technosphere_matrix'|'biosphere_matrix', row, col): baseline param sum}
+    new_grouped_updates : dict
+        Same shape, with the sampled parameter values.
+
+    Returns
+    -------
+    dict
+        Cell-wise delta, ready for ``apply_param_delta_to_matrices``.
+    """
+    keys = set(baseline_grouped_updates) | set(new_grouped_updates)
+    return {
+        k: new_grouped_updates.get(k, 0.0) - baseline_grouped_updates.get(k, 0.0)
+        for k in keys
+    }
+
+
+def apply_param_delta_to_matrices(
+    tech_matrix,
+    bio_matrix,
+    param_delta: Mapping[Tuple[str, int, int], float],
+):
+    """
+    Apply a pre-computed parameter delta on top of existing matrices.
+
+    Unlike ``apply_updates_to_matrices`` this does **not** subtract a baseline
+    parameter sum: it is meant to be used when the input matrices have already
+    been perturbed by a background-database uncertainty draw and only the
+    foreground parameter delta still has to be overlaid.
+
+    Parameters
+    ----------
+    tech_matrix, bio_matrix : sparse matrix
+        Current matrices (e.g. after a background draw; will NOT be mutated).
+    param_delta : dict
+        {(matrix_name, row, col): delta_value} produced by ``compute_param_delta``.
+
+    Returns
+    -------
+    (tech, bio) : tuple of sparse CSR matrices
+    """
+    tech = tech_matrix.tolil(copy=True)
+    bio = bio_matrix.tolil(copy=True)
+
+    for (matrix, r, c), delta in param_delta.items():
+        if matrix == "technosphere_matrix":
+            tech[r, c] = float(tech[r, c]) + delta
+        elif matrix == "biosphere_matrix":
+            bio[r, c] = float(bio[r, c]) + delta
+
+    return tech.tocsr(), bio.tocsr()
