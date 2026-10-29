@@ -13,11 +13,11 @@ import traceback
 import multiprocessing as mp
 
 import bw2data as bd
-from utils import lca_project_setup
-from utils import lca_parameters
-from utils import lca_contribution
-from utils import lca_monte_carlo
-from utils import lca_sobol
+from para_gsa import lca_project_setup
+from para_gsa import lca_parameters
+from para_gsa import lca_contribution
+from para_gsa import lca_monte_carlo
+from para_gsa import lca_sobol
 
 
 # ============================================================

@@ -1,11 +1,11 @@
 ## Contributors
 
-<a href="https://github.com/lucas-sys/para_gsa_bw25/graphs/contributors">
-  <img src="https://img.shields.io/github/contributors/lucas-sys/para_gsa_bw25?style=for-the-badge&logo=github" alt="Contributors"/>
+<a href="https://github.com/lucas-sys/para_gsa/graphs/contributors">
+  <img src="https://img.shields.io/github/contributors/lucas-sys/para_gsa?style=for-the-badge&logo=github" alt="Contributors"/>
 </a>
 
-<a href="https://github.com/lucas-sys/para_gsa_bw25/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=lucas-sys/para_gsa_bw25" alt="Contributors"/>
+<a href="https://github.com/lucas-sys/para_gsa/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=lucas-sys/para_gsa" alt="Contributors"/>
 </a>
 
 
@@ -32,7 +32,7 @@ This toolkit was developed in collaboration by Rebecca Belfiore, Christhel Andra
 
 ```
 .
-├── utils/                            # Core LCA modules
+├── para_gsa/                            # Core LCA modules
 │   ├── __init__.py                   # Public API re-exports
 │   ├── lca_config.py                 # Configuration, logging, Timer, LCASetup
 │   ├── lca_project_setup.py          # Brightway project init, MultiLCA
@@ -66,18 +66,47 @@ This toolkit was developed in collaboration by Rebecca Belfiore, Christhel Andra
 ## Prerequisites
 
 - Python >= 3.10
-- [Brightway2.5](https://brightway.dev/) (`bw2data`, `bw2calc`, `bw2io`, `bw2analyzer`)
+- [Brightway2.5](https://brightway.dev/) (`bw2data`, `bw2calc`, `bw2analyzer`; `bw2io` only for the database-initialization helper)
 - An ecoinvent database (requires ecoinvent license)
 
 ## Installation
 
+### From PyPI
+
 ```bash
-# Create and activate conda environment
+pip install para-gsa
+```
+
+The runtime dependencies (Brightway 2.5, SALib, NumPy, SciPy, pandas, asteval) are
+installed automatically. You still need your own Brightway project and, for
+background data, an ecoinvent licence.
+
+To also install the helper used to import ecoinvent / custom databases:
+
+```bash
+pip install "para-gsa[io]"
+```
+
+Verify the install:
+
+```bash
+python -c "import para_gsa; print(para_gsa.__version__)"
+```
+
+### From source (development)
+
+```bash
+git clone https://github.com/lucas-sys/para_gsa.git
+cd para_gsa
+pip install -e ".[dev]"
+```
+
+### Conda environment
+
+```bash
 conda create -n bw25 python=3.10
 conda activate bw25
-
-# Install core dependencies
-pip install -r requirements.txt
+pip install para-gsa
 ```
 
 ## Configuration
@@ -116,7 +145,7 @@ Place your custom database Excel files in the `data/` directory and add entries 
 ### In Python
 
 ```python
-from utils import (
+from para_gsa import (
     set_project, initialize_multilca, deterministic_lca,
     oat_sensitivity, run_parallel_monte_carlo,
     build_sobol_problem, generate_sobol_samples,
@@ -166,7 +195,7 @@ sobol_results = run_parallel_sobol_from_samples(
 )
 
 # FAST / RBD-FAST GSA
-from utils import lca_fast
+from para_gsa import lca_fast
 
 fast_problem, fast_params = lca_fast.build_fast_problem(GROUP_NAME)
 

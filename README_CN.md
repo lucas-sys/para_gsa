@@ -1,11 +1,11 @@
 ## 贡献者
 
-<a href="https://github.com/lucas-sys/para_gsa_bw25/graphs/contributors">
-  <img src="https://img.shields.io/github/contributors/lucas-sys/para_gsa_bw25?style=for-the-badge&logo=github" alt="贡献者人数"/>
+<a href="https://github.com/lucas-sys/para_gsa/graphs/contributors">
+  <img src="https://img.shields.io/github/contributors/lucas-sys/para_gsa?style=for-the-badge&logo=github" alt="贡献者人数"/>
 </a>
 
-<a href="https://github.com/lucas-sys/para_gsa_bw25/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=lucas-sys/para_gsa_bw25" alt="贡献者头像" />
+<a href="https://github.com/lucas-sys/para_gsa/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=lucas-sys/para_gsa" alt="贡献者头像" />
 </a>
 
 
@@ -31,7 +31,7 @@
 
 ```
 .
-├── utils/                            # 核心 LCA 模块
+├── para_gsa/                            # 核心 LCA 模块
 │   ├── __init__.py                   # 公共 API 统一导出
 │   ├── lca_config.py                 # 配置、日志、计时器、LCASetup
 │   ├── lca_project_setup.py          # Brightway 项目初始化、MultiLCA
@@ -58,6 +58,7 @@
 ├── test_run.py                       # 快速验证测试
 ├── test_sobol_only.py                # Sobol 专项测试
 ├── requirements.txt
+├── pyproject.toml                    # 打包与依赖声明
 ├── LICENSE
 └── README.md
 ```
@@ -65,18 +66,46 @@
 ## 环境要求
 
 - Python >= 3.10
-- [Brightway2.5](https://brightway.dev/) (`bw2data`, `bw2calc`, `bw2io`, `bw2analyzer`)
+- [Brightway2.5](https://brightway.dev/)（`bw2data`、`bw2calc`、`bw2analyzer`；`bw2io` 仅初始化脚本需要）
 - ecoinvent 数据库（需要 ecoinvent 许可证）
 
 ## 安装
 
+### 从 PyPI 安装
+
 ```bash
-# 创建并激活 conda 环境
+pip install para-gsa
+```
+
+运行时依赖（Brightway 2.5、SALib、NumPy、SciPy、pandas、asteval）会自动安装。
+仍需自备 Brightway 项目和（背景数据所需的）ecoinvent 许可证。
+
+如还需要导入 ecoinvent / 自定义数据库的辅助依赖：
+
+```bash
+pip install "para-gsa[io]"
+```
+
+验证安装：
+
+```bash
+python -c "import para_gsa; print(para_gsa.__version__)"
+```
+
+### 从源码安装（开发）
+
+```bash
+git clone https://github.com/lucas-sys/para_gsa.git
+cd para_gsa
+pip install -e ".[dev]"
+```
+
+### conda 环境
+
+```bash
 conda create -n bw25 python=3.10
 conda activate bw25
-
-# 安装依赖
-pip install -r requirements.txt
+pip install para-gsa
 ```
 
 ## 配置说明
@@ -115,7 +144,7 @@ python init_databases.py
 ### Python 脚本
 
 ```python
-from utils import (
+from para_gsa import (
     set_project, initialize_multilca, deterministic_lca,
     oat_sensitivity, run_parallel_monte_carlo,
     build_sobol_problem, generate_sobol_samples,
@@ -164,7 +193,7 @@ sobol_results = run_parallel_sobol_from_samples(
 )
 
 # FAST / RBD-FAST GSA
-from utils import lca_fast
+from para_gsa import lca_fast
 
 fast_problem, fast_params = lca_fast.build_fast_problem(GROUP_NAME)
 

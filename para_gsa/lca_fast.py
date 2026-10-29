@@ -57,7 +57,7 @@ import pandas as pd
 import bw2calc as bc
 import bw2data as bd
 
-from utils.lca_config import (
+from para_gsa.lca_config import (
     VERBOSE,
     G_GROUP,
     G_PARAMETER_FORMULA_MAP,
@@ -77,22 +77,22 @@ from utils.lca_config import (
     Timer,
     _log,
 )
-from utils.lca_project_setup import set_project, initialize_multilca
-from utils.lca_parameters import (
+from para_gsa.lca_project_setup import set_project, initialize_multilca
+from para_gsa.lca_parameters import (
     get_activity_parameters,
     build_parameter_formula_map,
     build_exchange_formula_map,
     resolve_parameter_context,
     evaluate_exchange_formulas,
 )
-from utils.lca_matrices import (
+from para_gsa.lca_matrices import (
     aggregate_updates_by_cell,
     apply_grouped_updates_to_matrices,
     compute_param_delta,
     apply_param_delta_to_matrices,
 )
-from utils.lca_contribution import _reset_and_recalculate_mlca
-from utils.lca_monte_carlo import (
+from para_gsa.lca_contribution import _reset_and_recalculate_mlca
+from para_gsa.lca_monte_carlo import (
     _parse_score_key,
     _recompute_scores,
     _prepare_bg_data_objs,

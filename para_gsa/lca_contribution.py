@@ -24,19 +24,19 @@ from scipy import stats
 import bw2analyzer as bwa
 from bw2calc.multi_lca import MultiLCA
 
-from utils.lca_config import LCASetup
-from utils.lca_project_setup import (
+from para_gsa.lca_config import LCASetup
+from para_gsa.lca_project_setup import (
     initialize_multilca,
     flatten_multilca_scores,
 )
-from utils.lca_parameters import (
+from para_gsa.lca_parameters import (
     get_activity_parameters,
     build_parameter_formula_map,
     build_exchange_formula_map,
     resolve_parameter_context,
     evaluate_exchange_formulas,
 )
-from utils.lca_matrices import aggregate_updates_by_cell, apply_updates_to_matrices
+from para_gsa.lca_matrices import aggregate_updates_by_cell, apply_updates_to_matrices
 
 
 # -----------------------------------------------------------------------------

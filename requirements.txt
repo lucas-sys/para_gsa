@@ -1,11 +1,15 @@
+# Runtime dependencies are declared in pyproject.toml.
+# This file is kept for convenience (pip install -r requirements.txt).
 # Core LCA framework (Brightway 2.5)
-bw2data>=4.0
-bw2calc>=2.0
+bw2data>=4.0,<5
+bw2calc>=2.0,<3
+bw2analyzer>=0.11.8
+
+# Database import helper (init_databases.py) -- equivalent to: pip install "para-gsa[io]"
 bw2io>=0.9
-bw2analyzer>=0.12
 
 # Sensitivity analysis
-SALib>=1.5
+SALib>=1.4,<2
 
 # Scientific computing
 numpy>=1.24

@@ -16,7 +16,7 @@ New code should import from the corresponding sub-module directly.
 """
 
 # -- lca_config ----------------------------------------------------------------
-from utils.lca_config import (                          # noqa: F401
+from para_gsa.lca_config import (                          # noqa: F401
     VERBOSE,
     G_GROUP,
     G_PARAMETER_FORMULA_MAP,
@@ -42,7 +42,7 @@ from utils.lca_config import (                          # noqa: F401
 )
 
 # -- lca_project_setup ---------------------------------------------------------
-from utils.lca_project_setup import (                      # noqa: F401
+from para_gsa.lca_project_setup import (                      # noqa: F401
     set_project,
     build_fu_labels,
     build_demands,
@@ -52,7 +52,7 @@ from utils.lca_project_setup import (                      # noqa: F401
 )
 
 # -- lca_parameters ------------------------------------------------------------
-from utils.lca_parameters import (                         # noqa: F401
+from para_gsa.lca_parameters import (                         # noqa: F401
     get_activity_parameters,
     build_parameter_formula_map,
     resolve_parameter_context,
@@ -63,7 +63,7 @@ from utils.lca_parameters import (                         # noqa: F401
 )
 
 # -- lca_matrices --------------------------------------------------------------
-from utils.lca_matrices import (                           # noqa: F401
+from para_gsa.lca_matrices import (                           # noqa: F401
     aggregate_updates_by_cell,
     apply_updates_to_matrices,
     apply_grouped_updates_to_matrices,
@@ -72,7 +72,7 @@ from utils.lca_matrices import (                           # noqa: F401
 )
 
 # -- lca_contribution ----------------------------------------------------------
-from utils.lca_contribution import (                       # noqa: F401
+from para_gsa.lca_contribution import (                       # noqa: F401
     contribution_analysis,
     oat_sensitivity,
     analytical_variance_from_parameter,
@@ -83,7 +83,7 @@ from utils.lca_contribution import (                       # noqa: F401
 )
 
 # -- lca_monte_carlo -----------------------------------------------------------
-from utils.lca_monte_carlo import (                        # noqa: F401
+from para_gsa.lca_monte_carlo import (                        # noqa: F401
     mc_sample,
     chunkify_rows,
     _parse_score_key,
@@ -95,7 +95,7 @@ from utils.lca_monte_carlo import (                        # noqa: F401
 )
 
 # -- lca_sobol -----------------------------------------------------------------
-from utils.lca_sobol import (                              # noqa: F401
+from para_gsa.lca_sobol import (                              # noqa: F401
     build_sobol_problem,
     sanitize_sobol_problem,
     generate_sobol_samples,
@@ -111,7 +111,7 @@ from utils.lca_sobol import (                              # noqa: F401
 )
 
 # -- lca_fast ------------------------------------------------------------------
-from utils.lca_fast import (                               # noqa: F401
+from para_gsa.lca_fast import (                               # noqa: F401
     build_fast_problem,
     sanitize_fast_problem,
     generate_fast_samples,

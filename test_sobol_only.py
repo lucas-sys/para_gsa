@@ -32,9 +32,9 @@ log("Importing bw2data...")
 import bw2data as bd
 
 log("Importing lca modules...")
-from utils import lca_project_setup
-from utils import lca_parameters
-from utils import lca_sobol
+from para_gsa import lca_project_setup
+from para_gsa import lca_parameters
+from para_gsa import lca_sobol
 import pandas as pd
 
 log("All imports done")
