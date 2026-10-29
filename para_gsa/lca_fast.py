@@ -22,8 +22,8 @@ contributions from each input parameter using Fourier analysis of the model
 output sampled along a specially designed frequency-based space-filling curve.
 
 Two variants are supported via SALib:
-- FAST    : classic Fourier Amplitude Sensitivity Test -- S1 (first-order) only
-- RBD-FAST: Random Balance Designs FAST -- S1 + ST (total-order) with fewer samples
+- FAST    : classic Fourier Amplitude Sensitivity Test (eFAST) -- S1 + ST
+- RBD-FAST: Random Balance Designs FAST -- S1 only in current SALib
 
 Supported Brightway uncertainty types: 2 (lognormal), 3 (normal),
                                          4 (uniform), 5 (triangular).
@@ -392,7 +392,7 @@ def generate_fast_samples(
         SALib problem dictionary (output of ``build_fast_problem``).
     M : int, default 4
         Interference factor for FAST / RBD-FAST. The number of harmonics.
-        Total sample size = ``4 * M^2 * num_vars + 1`` (FAST) or a multiple
+        Total sample size = ``(4 * M**2 + 1) * num_vars`` (FAST) or a multiple
         of ``num_vars`` (RBD-FAST, set by ``N`` parameter which defaults to
         ``65`` multiples inside SALib). For RBD-FAST M is the number of
         harmonics for the total-effect calculation.
@@ -401,9 +401,9 @@ def generate_fast_samples(
         deterministic).
     method : {'fast', 'rbd_fast'}
         Sampling method:
-        - ``'fast'``    : classic FAST (S1 only, deterministic sample).
+        - ``'fast'``    : classic FAST (S1 + ST, deterministic sample).
                           Uses ``SALib.sample.fast_sampler``.
-        - ``'rbd_fast'``: Random Balance Designs FAST (S1 + ST, random sample).
+        - ``'rbd_fast'``: Random Balance Designs FAST (S1 only, random sample).
                           Uses ``SALib.sample.latin``.
 
     Returns
@@ -427,7 +427,10 @@ def generate_fast_samples(
 
     if method_lower == "fast":
         from SALib.sample.fast_sampler import sample as fast_sample_fn
-        samples = fast_sample_fn(fast_problem_clean, M=M)
+        # SALib >= 1.5 requires the base sample size N explicitly. The
+        # recommended value is 4 * M**2 + 1 rows per parameter, so the total
+        # matrix is (4 * M**2 + 1) * num_vars (see expected_fast_sample_rows).
+        samples = fast_sample_fn(fast_problem_clean, N=4 * M ** 2 + 1, M=M)
 
     elif method_lower == "rbd_fast":
         # RBD-FAST uses a Latin Hypercube sample (random)
@@ -831,8 +834,8 @@ def fast_indices_from_results(
     Returns
     -------
     dict
-        Raw SALib Si dict.  Classic FAST: ``{'S1', 'S1_conf'}``.
-        RBD-FAST: ``{'S1', 'S1_conf', 'ST', 'ST_conf'}``.
+        Raw SALib Si dict.  Classic FAST: ``{'S1', 'S1_conf', 'ST', 'ST_conf'}``.
+        RBD-FAST: ``{'S1', 'S1_conf'}``.
 
     Notes
     -----
@@ -911,8 +914,8 @@ def fast_indices_to_dataframe(
     -------
     pd.DataFrame
         Tidy DataFrame sorted by ``S1`` descending.
-        Classic FAST columns : ``Parameter, S1, S1_conf``
-        RBD-FAST columns     : ``Parameter, S1, S1_conf, ST, ST_conf``
+        Classic FAST columns : ``Parameter, S1, S1_conf, ST, ST_conf``
+        RBD-FAST columns     : ``Parameter, S1, S1_conf``
     """
     names = list(fast_problem["names"])
     rows = []

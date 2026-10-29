@@ -197,7 +197,7 @@ from para_gsa import lca_fast
 
 fast_problem, fast_params = lca_fast.build_fast_problem(GROUP_NAME)
 
-# --- Classic FAST (S1 only, fewer samples) ---
+# --- 经典 FAST（S1 + ST）---
 fast_samples = lca_fast.generate_fast_samples(fast_problem, M=4, method='fast')
 fast_results = lca_fast.run_parallel_fast_from_samples(
     project_name=PROJECT_NAME,
@@ -219,7 +219,7 @@ Si_fast = lca_fast.fast_indices_from_results(
 )
 df_fast = lca_fast.fast_indices_to_dataframe(Si_fast, fast_problem, analysis_method='fast')
 
-# --- RBD-FAST (S1 + ST) ---
+# --- RBD-FAST（仅 S1）---
 rbd_samples = lca_fast.generate_fast_samples(fast_problem, M=4, method='rbd_fast', seed=42)
 rbd_results = lca_fast.run_parallel_fast_from_samples(
     project_name=PROJECT_NAME,
@@ -295,8 +295,8 @@ result = lca_fast.run_full_fast_workflow(
 
 | 变体       | 函数                  | 指数      | 样本量公式       | 说明                     |
 | -------- | ------------------- | ------- | ----------- | ---------------------- |
-| 经典 FAST  | `method='fast'`     | S1      | `(4M²+1)·k` | 确定性，仅一阶，样本量低           |
-| RBD-FAST | `method='rbd_fast'` | S1 + ST | `≥65·k`     | 随机，一阶+全阶，SALib 拉丁超立方采样 |
+| 经典 FAST  | `method='fast'`     | S1 + ST | `(4M²+1)·k` | 确定性，一阶+全阶，样本量低          |
+| RBD-FAST | `method='rbd_fast'` | S1      | `≥65·k`     | 随机，仅一阶，SALib 拉丁超立方采样    |
 
 其中 `k` = 不确定参数个数，`M` = 干扰因子（推荐默认值 4）。
 
@@ -305,8 +305,8 @@ result = lca_fast.run_full_fast_workflow(
 | 方法       | 一阶 S1 | 全阶 ST | 最小推荐样本      | 适用场景        |
 | -------- | ----- | ----- | ----------- | ----------- |
 | Sobol    | ✓     | ✓     | `N·(k+2)`   | 标准全局 GSA    |
-| 经典 FAST  | ✓     | ✗     | `(4M²+1)·k` | 仅需 S1，样本预算紧 |
-| RBD-FAST | ✓     | ✓     | `65·k`      | 样本量介于二者之间   |
+| 经典 FAST  | ✓     | ✓     | `(4M²+1)·k` | 一阶+全阶，样本预算紧 |
+| RBD-FAST | ✓     | ✗     | `65·k`      | 仅一阶，样本量介于二者之间 |
 
 主要 API：
 

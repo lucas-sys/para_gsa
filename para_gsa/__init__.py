@@ -17,7 +17,7 @@ lca_fast            FAST / RBD-FAST global sensitivity analysis
 lca_gsa_helper      Backward-compatible re-export layer
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from para_gsa.lca_config import (                         # noqa: F401
     VERBOSE,

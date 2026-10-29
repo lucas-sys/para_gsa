@@ -199,7 +199,7 @@ from para_gsa import lca_fast
 
 fast_problem, fast_params = lca_fast.build_fast_problem(GROUP_NAME)
 
-# --- Classic FAST (S1 only, fewer samples) ---
+# --- Classic FAST (S1 + ST) ---
 fast_samples = lca_fast.generate_fast_samples(fast_problem, M=4, method='fast')
 fast_results = lca_fast.run_parallel_fast_from_samples(
     project_name=PROJECT_NAME,
@@ -221,7 +221,7 @@ Si_fast = lca_fast.fast_indices_from_results(
 )
 df_fast = lca_fast.fast_indices_to_dataframe(Si_fast, fast_problem, analysis_method='fast')
 
-# --- RBD-FAST (S1 + ST) ---
+# --- RBD-FAST (S1 only) ---
 rbd_samples = lca_fast.generate_fast_samples(fast_problem, M=4, method='rbd_fast', seed=42)
 rbd_results = lca_fast.run_parallel_fast_from_samples(
     project_name=PROJECT_NAME,
@@ -295,8 +295,8 @@ Open `gsa_workflow.ipynb` and run cells sequentially. The notebook covers the co
 
 | Variant   | Function            | Indices | Sample size formula | Notes                                    |
 | --------- | ------------------- | ------- | ------------------- | ---------------------------------------- |
-| Classic FAST | `method='fast'`  | S1      | `(4M²+1)·k`         | Deterministic, first-order only, low sample cost |
-| RBD-FAST  | `method='rbd_fast'` | S1 + ST | `≥65·k`             | Random, first + total order, Latin hypercube sampling |
+| Classic FAST | `method='fast'`  | S1 + ST | `(4M²+1)·k`         | Deterministic, first + total order, low sample cost |
+| RBD-FAST  | `method='rbd_fast'` | S1      | `≥65·k`             | Random, first-order only, Latin hypercube sampling |
 
 where `k` = number of uncertain parameters, `M` = interference factor (recommended default: 4).
 
@@ -305,8 +305,8 @@ where `k` = number of uncertain parameters, `M` = interference factor (recommend
 | Method       | S1  | ST  | Min. recommended samples | When to use                       |
 | ------------ | --- | --- | ------------------------ | --------------------------------- |
 | Sobol        | ✓   | ✓   | `N·(k+2)`                | Standard full GSA                 |
-| Classic FAST | ✓   | ✗   | `(4M²+1)·k`              | S1 only, tight sample budget      |
-| RBD-FAST     | ✓   | ✓   | `65·k`                   | S1 + ST at lower cost than Sobol  |
+| Classic FAST | ✓   | ✓   | `(4M²+1)·k`              | S1 + ST, tight sample budget      |
+| RBD-FAST     | ✓   | ✗   | `65·k`                   | S1 only at lower cost than Sobol  |
 
 Key API:
 
